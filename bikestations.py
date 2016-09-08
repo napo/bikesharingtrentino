@@ -25,9 +25,10 @@ THE SOFTWARE.
 from pysqlite2 import dbapi2 as sqlite3   
 import requests, datetime
 class Bikestations():
-    url = "https://os.smartcommunitylab.it/core.mobility/bikesharing/trento"
+    cities = ["trento","rovereto","pergine_valsugana"]
+    url = "https://os.smartcommunitylab.it/core.mobility/bikesharing/"
     wgs84 = 4326
-    db = "bikestations.sqlite"
+    db = "bikestationstrentino.sqlite"
     def __init__(self):
         self.con=sqlite3.connect(self.db)        
         self.con.enable_load_extension(True)
@@ -37,7 +38,7 @@ class Bikestations():
         if (geo == 0):
             self.cur.execute('SELECT InitSpatialMetadata();')
         createstations = '''
-        CREATE TABLE if not exists stations (id INTEGER NOT NULL, name TEXT, address TEXT, latitude REAL, longitude REAL, slots INTEGER);
+        CREATE TABLE if not exists stations (id INTEGER NOT NULL, city TEXT, name TEXT, address TEXT, latitude REAL, longitude REAL, slots INTEGER);
         '''
         addgeometry = "SELECT AddGeometryColumn('stations', 'geometry', %s, 'POINT', 'XY');" % self.wgs84
         createbikesuse= '''
@@ -48,22 +49,24 @@ class Bikestations():
         self.cur.execute(createbikesuse);
         cname = self.cur.execute('select count(name) from stations').fetchone()[0]
         if cname == 0:
-            r = requests.get(self.url)
-            data =  r.json()
-            for datum in data: 
-                idstation = datum['id']
-                address = datum['address']
-                slots = datum['slots']
-                name = datum['name']
-                latitude = datum['position'][0]
-                longitude = datum['position'][1]
-                geometryfromtext = "GeomFromText('POINT(%s %s)', %s)" % (latitude, longitude,self.wgs84)
-                insertsql = '''
-                INSERT INTO stations VALUES (%s,'%s','%s', %s, %s, %s, %s);
-                ''' % (idstation,name,address,latitude,longitude,slots,geometryfromtext)
-                self.cur.execute(insertsql)
-        self.con.commit()
-            
+            for city in self.cities:
+                urlc = self.url + city
+                r = requests.get(urlc)
+                data =  r.json()
+                for datum in data: 
+                    idstation = datum['id']
+                    address = datum['address']
+                    slots = datum['slots']
+                    name = datum['name']
+                    latitude = datum['position'][0]
+                    longitude = datum['position'][1]
+                    geometryfromtext = "GeomFromText('POINT(%s %s)', %s)" % (latitude, longitude,self.wgs84)
+                    insertsql = '''
+                    INSERT INTO stations VALUES (%s,'%s','%s','%s', %s, %s, %s, %s);
+                    ''' % (idstation,city,name,address,latitude,longitude,slots,geometryfromtext)
+                    self.cur.execute(insertsql)
+            self.con.commit()
+                
     def addbikes(self):
         r = requests.get("https://os.smartcommunitylab.it/core.mobility/bikesharing/trento")
         data =  r.json()
